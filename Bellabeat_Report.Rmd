@@ -1,0 +1,221 @@
+---
+title: "Bellabeat Case Study"
+author: "Alex T"
+date: "2023-04-12"
+output: html_document
+---
+```{r echo=FALSE, message=FALSE}
+#Load necessary packages
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(dplyr)
+library(readr)
+```
+
+
+## About the company
+Bellabeat is a high-tech company that manufactures health-focused
+smart products.Bellabeat has grown rapidly since its founding in 2013 and has
+centered itself as a tech-driven wellness company for women.
+
+
+## Business task
+Identify possible growth opportunities for Bellabeat smart devices and marketing
+strategies based on insights from other health-focused smart devices.
+
+
+## The data
+The data set for this case study was the FitBit Fitness Tracker Data.
+The data set was provided by user Mobius through the website Kaggle and was
+generated originally by respondents to a distributed survey via Amazon
+Mechanical Turk. The survey ran for 61 days starting March,12th 2016 and ending
+on May, 12th 2016. Thirty eligible FitBit users consented to the submission of
+personal tracker data, including minute-level output for physical activity,
+heart rate, and sleep monitoring.
+
+## Diving into the data
+Summary of the data sets:
+```{r echo=FALSE}
+con <- gzfile("data_list.rds")
+data_list <- readRDS(con)
+
+#Get summary of data
+lapply(data_list, function(x) {
+  select(x, (!ends_with('id') & !ends_with('date') & !ends_with('time'))) %>% 
+    summary
+})
+
+close(con)
+
+#Remove scientific notation
+options(scipen=999)
+
+#change name of sleep date column for merging purposes
+colnames(data_list$sleep)[5] <- 'activity_date'
+
+#merge activity and sleep data frames
+merged_activity_sleep <- merge(data_list$`daily_activity `,
+                               data_list$sleep, by=c ('id', 'activity_date'))
+```
+### Key details from summary
+
+* Users sleep once on average for 419.5 minutes(7 hours).  
+  + 7 hours is the recommended hours of sleep for adults aged 12 - 60.  
+&nbsp;    
+
+* The average steps per day is 7638.
+  + According to the CDC, 8000 steps per day is associated with a 51% lower risk
+    for all-cause mortality, or death from all causes.
+  + 12,000 steps per day is associated with a 65% lower risk.
+  + The number of steps has a strong association with morality, not the
+    intensity.  
+&nbsp;   
+* A majority of the users are lightly active when not sedentary.
+&nbsp;   
+* Users on average are sedentary for 991 minutes(16.5 hours). Could imply that
+  the individuals chosen for this data set work office/desk jobs.
+    
+### Looking at the data 
+```{r, echo=FALSE}
+#intensity and time
+intensity_time <- data_list$hourly_intensity
+#Change the display order for the x axis
+intensity_time$activity_time <- factor(intensity_time$activity_time,
+                                       c("01:00 AM", "02:00 AM",
+                                         "03:00 AM", "04:00 AM",
+                                         "05:00 AM","06:00 AM",
+                                         "07:00 AM", "08:00 AM",
+                                         "09:00 AM", "10:00 AM",
+                                         "11:00 AM", "12:00 PM",
+                                         "01:00 PM", "02:00 PM",
+                                         "03:00 PM", "04:00 PM",
+                                         "05:00 PM","06:00 PM",
+                                         "07:00 PM", "08:00 PM",
+                                         "09:00 PM", "10:00 PM",
+                                         "11:00 PM", "12:00 AM"))
+intensity_time <- intensity_time%>% 
+  group_by(activity_time) %>% 
+  summarise(intensity = sum(total_intensity))
+
+ggplot(intensity_time, aes(x=activity_time, y=intensity, fill='#FE8F77')) +
+  geom_col(show.legend = FALSE) +
+  labs(title = 'Activity by the hour', x = 'Hour', y = 'Total intensity') +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+Looking at the chart we can see that:  
+
+* People are the most active during the hours of 5-7 PM. It would seem that most
+  seem to begin their workout after getting off work.  
+* People favor early morning workouts over late night.
+  
+```{r echo=FALSE, message=FALSE}
+
+#change name of sleep date column for merging purposes
+colnames(data_list$sleep)[5] <- 'activity_date'
+
+#merge activity and sleep data frames
+merged_activity_sleep <- merge(data_list$`daily_activity `,
+                               data_list$sleep, by=c ('id', 'activity_date'))
+#Calories and steps
+steps_calories <- merged_activity_sleep %>% 
+  group_by(total_steps) %>% 
+  summarise(calories_burned = sum(calories))
+
+ggplot(steps_calories, aes(x=total_steps, y=calories_burned)) +
+  geom_smooth() +
+  geom_point(stat = 'identity') +
+  labs(title = 'Steps and calories correlation',
+       x = 'Total steps', y = 'Calories')
+```
+
+* We can see that there is a positive correlation between calories burned
+  and steps taken. The more active you are, the more calories you burn.  
+* According to the CDC, intensity doesn't really matter in this case so we
+  can let app users know they are allowed to pace themselves with their steps
+  throughout the day. 
+  
+  
+  
+```{r echo=FALSE}
+#Daily steps
+daily_steps <- data_list$daily_steps
+daily_steps$weekday <- wday(mdy(daily_steps$activity_date), label = TRUE)
+daily_steps$weekday <- factor(daily_steps$weekday, c("Mon", "Tue", "Wed", "Thu","Fri","Sat", "Sun"))
+
+daily_steps <- daily_steps%>% 
+  group_by(weekday) %>% 
+  summarise(total = mean(step_total))
+
+ggplot(daily_steps, aes(x=weekday, y=total,  fill='#FE8F77')) +
+  geom_col(show.legend = FALSE) + geom_hline(yintercept = 8000) +
+  labs(title = "Average steps per day", x= 'Weekday', y = 'Steps')
+```
+  
+
+Looking at the chart tells us:  
+
+* On average, the CDC recommended step goal is only reached on Tuesday & Saturday
+    + While 8000 steps are good, 10,000 or 12,000 steps daily would be ideal per
+    the CDC.
+* The lowest average steps on Sunday.
+    + Could be because people are mainly relaxing and getting ready for the work
+    week.
+    
+## Recommendations
+
+### Recommendations for future analysis
+* A more detailed and diverse data set would be extremely beneficial to gathering
+more accurate insights. Future data should include the user's sex, height, and 
+age.it could also be helpful to include the type of work they do categorized by
+activity level: sedentary, moderate etc.
+
+* The data should also feature a larger number of participants with varying
+characteristics such as age and sex.
+
+* Having app users answer various survey questions after consistently using the
+  app for at least 1 month would be very helpful with gathering insight for
+  future analysis.
+  + Survey questions could be about the app itself or anything pertaining to
+    exercise.
+
+
+### Recommendations for Bellabeat app
+* The app should give users the ability to turn on health notifications/tips
+  that are separate from the standard in-app notifications. Notifications could
+  be from the CDC or any reputable health organization.
+  
+  + Notifications could be sent daily, weekly, or even dependent on particular
+    situations(E.g: step counter approaching the recommended 8000,
+    sleeping less than the recommended hours). The goal here is to inform users
+    on why it may be important to hit certain numbers.
+    
+  + Tips and techniques tailored to an individual's stats should also be sent
+    out periodically.
+    
+  + The membership program may have to be reworked in order to prevent the free
+    insights from compromising on the paid insights.Analysis on the
+    membership program would be needed to discuss further.
+    
+* Using the app consistently should allow users to receive discount on other
+  Bellabeat products.
+  
+### General recommendations
+* Having ads play during the busiest workout times(5PM - 7PM) could possibly be
+  beneficial to getting more people to use the Bellabeat app/products if the
+  busy trend is reflective of other people that workout.
+    + Radio ads for those getting off work or on the way to the gym.
+      (Spotify included)
+    + Television ads for gyms that have accessible TVs.
+
+## Conclusion
+While the current data will suffice at the moment, more data will be needed in
+order to give more detailed insight and to make bigger business decisions with
+confidence. A survey involving current Bellabeat customers would be the best way
+to springboard any further phases of analysis.
+
+
+## Appendix
+* [CDC Recommended sleep](https://www.cdc.gov/sleep/about_sleep/how_much_sleep.html)
+* [CDC Steps per day](https://www.cdc.gov/media/releases/2020/p0324-daily-step-count.html#:~:text=Taking%2012%2C000%20steps%20per%20day,compared%20with%20taking%204%2C000%20steps)

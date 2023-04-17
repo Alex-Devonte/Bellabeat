@@ -1,0 +1,184 @@
+---
+title: "Bellabeat Cleaning Report"
+author: "Alex T"
+date: "2023-03-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load packages
+```{r}
+#Load necessary packages
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(dplyr)
+library(readr)
+```
+
+### Importing data
+Cleaning began with changing the csv file names in the data set to be more
+uniform. Words were broken up by underscores and words were made all lowercase.
+This step was done via Google Docs before the files were imported into RStudio.
+
+The FitBit tracker data set included 18 csv files. After skimming the data in 
+Google Sheets, I decided on the following data sets: 
+```{r}
+#Create data frames from csv files with clean names
+daily_activity_df <- clean_names(read.csv('daily_activity_merged.csv'))
+daily_calories_df <- clean_names(read.csv('daily_calories_merged.csv'))
+hourly_intensity_df <- clean_names(read.csv('hourly_intensities_merged.csv'))
+daily_intensity_df <- clean_names(read.csv('daily_intensities_merged.csv'))
+daily_steps_df <- clean_names(read.csv('daily_steps_merged.csv'))
+heartrate_df <- clean_names(read.csv('heartrate_seconds_merged.csv'))
+sleep_df <- clean_names(read.csv('sleep_day_merged.csv'))
+weight_df <- clean_names(read.csv('weight_log_info_merged.csv'))
+```
+
+The imported csv files were then added to a list for easier management.
+```{r}
+#Create list to hold all data frames
+data_list = list('daily_activity '= daily_activity_df,
+                 'daily_calories' = daily_calories_df,
+                 'hourly_intensity' = hourly_intensity_df,
+                 'daily_intensity' = daily_intensity_df,
+                 'daily_steps' = daily_steps_df,
+                 'heartrate' = heartrate_df,
+                 'sleep' = sleep_df,
+                 'weight' = weight_df)
+```
+
+Utilized the 'head()' function on all the data sets to to get a quick peek at
+everything before proceeding. 
+```{r}
+lapply(data_list, function(x) {
+  head(x)
+})
+```
+
+The information on the FitBit data set said that it included data from 30 users 
+so I decided to double check that fact.
+```{r}
+#Get the distinct number of users in each data set
+lapply(data_list, function(x) {
+  print(n_distinct(x$id))
+})
+
+```
+
+Upon running the above function, I discovered that there was actually data for
+33 users in 5 of the data sets(daily activity, daily calories, hourly intensity,
+daily intensity, and daily steps).There was data for 14 users in the heart rate
+data set, 24 in the sleep data set, and 8 in the weight data set. There weren't
+enough users in the heart rate or weight data sets to make any decisions with
+confidence so they were excluded from the analysis going forward.
+```{r}
+#Remove list elements
+data_list <- within(data_list, rm('heartrate'))
+data_list <- within(data_list, rm('weight'))
+length(data_list)
+```
+
+The list of data frames was then looped through in order to find incorrect data
+values.
+```{r}
+#Check all rows for data validity
+lapply(data_list, function(x) {
+  lapply(x, function(y) {
+    #Check for empty or NULL values
+    if (is.null(y) | is_empty(y)) {
+      print("NULL or empty values")
+    }
+    #Run checks on columns to ensure values are the correct data type
+     else if (typeof(y) == "double" | typeof(y) == "integer") {
+      if (is.numeric(y)) {
+        print("All numerical data types are correct")
+      } else {
+        print ("Incorrect numerical data types")
+      }
+    }
+    else if (typeof(y) == "character") {
+      if (is.character(y)) {
+        print("All character data types are correct")
+      } else {
+        print ("Incorrect character data types")
+      }
+    }
+  })
+})
+```
+
+Now to check for duplicated values and to remove them if any are found
+```{r}
+#Check for duplicate values
+sapply(data_list, function(x) sum(duplicated(x)))
+
+#Remove duplicate values from sleep data set
+data_list$sleep <- data_list$sleep[!duplicated(data_list$sleep), ]
+
+sapply(data_list, function(x) sum(duplicated(x)))
+```
+
+I noticed that the hourly intensity and sleep data sets included the time along
+with the date in the same column, so I split them into their own separate
+columns.
+
+The time values in the old sleep column
+were all 12 am so there was no need to include that in a new column.
+```{r}
+#split date and time into their own respective columns
+data_list$hourly_intensity$activity_date <- (format(as.Date(data_list$hourly_intensity$activity_hour, '%m/%d/%Y'), format ="%m/%d/%Y"))
+data_list$hourly_intensity$activity_time <- ((format(as.POSIXct(data_list$hourly_intensity$activity_hour, '%m/%d/%Y %I:%M:%S %p', tz =''), format = "%I:%M %p")))
+data_list$sleep$sleep_date <-(format(as.Date(data_list$sleep$sleep_day, '%m/%d/%Y'), format ="%m/%d/%Y"))
+```
+
+The old data columns can now be dropped.
+```{r}
+#Remove old date columns
+data_list$hourly_intensity <- subset(data_list$hourly_intensity, select = -activity_hour)
+data_list$sleep <- subset(data_list$sleep, select = -sleep_day)
+
+head(data_list$hourly_intensity)
+head(data_list$sleep)
+```
+
+
+Adjusted the column names in the other data sets to 'date' instead of 'day'.
+```{r}
+#replace columns with suffix 'day' with 'date'
+colnames(data_list$daily_calories) <- gsub(colnames(data_list$daily_calories), pattern = '_day', replacement = '_date')
+colnames(data_list$daily_intensity) <- gsub(colnames(data_list$daily_intensity), pattern = '_day', replacement = '_date')
+colnames(data_list$daily_steps) <- gsub(colnames(data_list$daily_steps), pattern = '_day', replacement = '_date')
+```
+
+Adjust the date format in the other data sets to also have a two digit month
+```{r}
+#Format the other dates
+data_list$`daily_activity `$activity_date <- format(mdy(data_list$`daily_activity `$activity_date), format = '%m/%d/%Y')
+data_list$`daily_calories`$activity_date <- format(mdy(data_list$`daily_calories`$activity_date), format = '%m/%d/%Y')
+data_list$`daily_intensity`$activity_date <- format(mdy(data_list$`daily_intensity`$activity_date), format = '%m/%d/%Y')
+data_list$`daily_steps`$activity_date <- format(mdy(data_list$`daily_steps`$activity_date), format = '%m/%d/%Y')
+
+sapply(data_list, head)
+```
+
+
+The minimum for the calories columns are 0.This should be impossible according
+to the Basal Metabolic Rate(BMR),which is basically the number of calories
+you burn just by existing. The zeroes will be converted to NA.
+```{r}
+summary(data_list$daily_calories$calories)
+
+#Convert the 0 values into NA
+data_list$daily_calories[data_list$daily_calories == 0] <- NA
+data_list$`daily_activity `$calories[data_list$daily_activity$calories == 0] <- NA
+
+summary(data_list$daily_calories$calories)
+```
+
+```{r}
+saveRDS(data_list, 'data_list.rds')
+```
